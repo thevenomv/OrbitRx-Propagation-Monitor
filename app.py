@@ -783,6 +783,7 @@ def get_space_weather():
 
 # --- GREYLINE MATH & DRAWING ---
 def draw_greyline():
+    global latest_dx_canvas_points
     canvas.delete("all")
     width = 700
     height = 560
@@ -844,6 +845,15 @@ def draw_greyline():
         cy = (height / 2) - ((lat / 90) * (height / 2))
         return cx, cy
 
+    latest_dx_canvas_points = []
+
+    # Plot Subsolar Point (Sun)
+    sun_lon_wrapped = (sun_lon_deg + 180) % 360 - 180
+    sun_x, sun_y = world_to_canvas(declination_deg, sun_lon_wrapped)
+    canvas.create_oval(sun_x-12, sun_y-12, sun_x+12, sun_y+12, fill="#FFEB3B", outline="#FFA000", width=2)
+    canvas.create_oval(sun_x-20, sun_y-20, sun_x+20, sun_y+20, outline="#FFE082", dash=(2,2))
+    canvas.create_text(sun_x, sun_y, text="☀️", font=("Segoe UI", 10))
+
     # Plot user location marker if available
     if user_lat is not None and user_lon is not None:
         px, py = world_to_canvas(user_lat, user_lon)
@@ -851,23 +861,30 @@ def draw_greyline():
             canvas.create_oval(px-7, py-7, px+7, py+7, fill="#00FF00", outline="#00FF00", width=2)
             canvas.create_text(px + 12, py - 10, text="You", fill="white", font=("Arial", 11, "bold"), anchor="w")
 
-            # Plot DX arcs from user to each spot
-            for spot in latest_dx_spots:
-                from_name = spot.get('from')
-                to_name = spot.get('to')
-                fpos = DX_COORDINATES.get(from_name)
-                tpos = DX_COORDINATES.get(to_name)
-                if fpos and tpos:
-                    fx, fy = world_to_canvas(fpos[0], fpos[1])
-                    tx, ty = world_to_canvas(tpos[0], tpos[1])
-                    # If user is one of the endpoints, connect directly
-                    if from_name == "W5XYZ" or to_name == "W5XYZ" or True:
-                        control_x = (px + fx + tx) / 3
-                        control_y = (py + fy + ty) / 3 - 40
-                        canvas.create_line(px, py, control_x, control_y, tx, ty, smooth=True, fill="#00FFFF", width=2, dash=(4,2))
-                    # mark DX spots
-                    canvas.create_oval(tx-5, ty-5, tx+5, ty+5, fill="#FF00FF", outline="#FFFFFF")
-                    canvas.create_text(tx + 8, ty - 8, text=f"{from_name}->{to_name}", fill="#FFFF66", font=("Arial", 9), anchor="w")
+    # Plot Great Circle DX arcs for each spot
+    for spot in latest_dx_spots:
+        from_name = spot.get('from')
+        to_name = spot.get('to')
+        fpos = DX_COORDINATES.get(from_name)
+        tpos = DX_COORDINATES.get(to_name)
+        if fpos and tpos:
+            fx, fy = world_to_canvas(fpos[0], fpos[1])
+            tx, ty = world_to_canvas(tpos[0], tpos[1])
+            
+            # Only draw lines that don't wrap all the way across the dateline
+            if abs(fx - tx) < width * 0.6:
+                mx, my = (fx + tx) / 2, (fy + ty) / 2
+                distance = math.hypot(tx - fx, ty - fy)
+                # Bend curve towards the nearest pole to simulate 2D great circle routing
+                cy = my - (distance * 0.15) if my < height / 2 else my + (distance * 0.15)
+                canvas.create_line(fx, fy, mx, cy, tx, ty, smooth=True, fill="#00FFFF", width=1.5, dash=(4,2))
+            
+            canvas.create_oval(fx-3, fy-3, fx+3, fy+3, fill="#00FFFF", outline="")
+            canvas.create_oval(tx-5, ty-5, tx+5, ty+5, fill="#FF00FF", outline="#FFFFFF")
+            canvas.create_text(tx + 8, ty - 8, text=f"{from_name}→{to_name}", fill="#FFFF66", font=("Arial", 9), anchor="w")
+            
+            # Save canvas coordinates so map clicks successfully tune the radio!
+            latest_dx_canvas_points.append((tx, ty, spot.get('freq', '14.000')))
 
 # --- AUTO-REFRESH TIMER ---
 def auto_refresh():
