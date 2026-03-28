@@ -879,10 +879,22 @@ def draw_greyline():
                 cy = my - (distance * 0.15) if my < height / 2 else my + (distance * 0.15)
                 canvas.create_line(fx, fy, mx, cy, tx, ty, smooth=True, fill="#00FFFF", width=1.5, dash=(4,2))
             
-            canvas.create_oval(fx-3, fy-3, fx+3, fy+3, fill="#00FFFF", outline="")
-            canvas.create_oval(tx-5, ty-5, tx+5, ty+5, fill="#FF00FF", outline="#FFFFFF")
-            canvas.create_text(tx + 8, ty - 8, text=f"{from_name}→{to_name}", fill="#FFFF66", font=("Arial", 9), anchor="w")
-            
+            # Spotter (FROM) — orange diamond with callsign
+            canvas.create_polygon(
+                fx, fy-7, fx+7, fy, fx, fy+7, fx-7, fy,
+                fill="#FF9800", outline="#FFFFFF", width=1
+            )
+            canvas.create_text(fx, fy - 12, text=from_name, fill="#FFC44D", font=("Arial", 8, "bold"), anchor="s")
+
+            # Target (TO) — purple dot with callsign
+            canvas.create_oval(tx-6, ty-6, tx+6, ty+6, fill="#FF00FF", outline="#FFFFFF", width=1)
+            canvas.create_text(tx + 9, ty - 10, text=to_name, fill="#FFFF66", font=("Arial", 8, "bold"), anchor="w")
+
+            # Freq label at midpoint of arc
+            mid_x = (fx + tx) / 2
+            mid_y = (fy + ty) / 2 - 14
+            canvas.create_text(mid_x, mid_y, text=f"{spot.get('freq','?')} MHz", fill="#00FFCC", font=("Arial", 8), anchor="center")
+
             # Save canvas coordinates so map clicks successfully tune the radio!
             latest_dx_canvas_points.append((tx, ty, spot.get('freq', '14.000')))
 
@@ -1038,18 +1050,115 @@ lbl_dx.pack(fill="x", padx=10, pady=(2, 8))
 lbl_history = tk.Label(card_dx, text="History lookup (Date):", font=("Segoe UI", 10, "bold"), bg="#131D35", fg="#FFD660", anchor="w")
 lbl_history.pack(fill="x", padx=10, pady=(6, 2))
 
-if CALENDAR_AVAILABLE:
-    entry_history = DateEntry(panel_stats, font=("Segoe UI", 10), width=20, background='#006AFF', foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
-    entry_history.pack(fill="x", padx=10, pady=(0, 8))
-else:
-    entry_history = tk.Entry(panel_stats, font=("Segoe UI", 10), width=22)
-    entry_history.insert(0, datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"))
-    entry_history.pack(fill="x", padx=10, pady=(0, 8))
+# --- Built-in pure-Tkinter calendar picker ---
+selected_history_date = tk.StringVar(value=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d"))
 
-btn_history = tk.Button(panel_stats, text="View History", command=lambda: view_history(entry_history.get().strip()), bg="#FFB300", fg="black", font=("Segoe UI", 10, "bold"), relief="raised", bd=2)
+frame_cal_entry = tk.Frame(card_dx, bg="#131D35")
+frame_cal_entry.pack(fill="x", padx=10, pady=(0, 4))
+
+lbl_cal_date = tk.Label(frame_cal_entry, textvariable=selected_history_date, font=("Segoe UI", 10, "bold"),
+                         bg="#131D35", fg="#00E5FF", anchor="w", width=12)
+lbl_cal_date.pack(side="left", padx=(0, 6))
+
+def open_calendar_picker():
+    cal_win = tk.Toplevel(window)
+    cal_win.title("Pick a date")
+    cal_win.configure(bg="#0B1220")
+    cal_win.resizable(False, False)
+    cal_win.attributes("-topmost", True)
+
+    try:
+        current = datetime.datetime.strptime(selected_history_date.get(), "%Y-%m-%d")
+    except Exception:
+        current = datetime.datetime.now(datetime.timezone.utc)
+
+    nav = {"year": current.year, "month": current.month}
+
+    def rebuild():
+        for w in frame_body.winfo_children():
+            w.destroy()
+        import calendar
+        cal_matrix = calendar.monthcalendar(nav["year"], nav["month"])
+        month_name = datetime.date(nav["year"], nav["month"], 1).strftime("%B %Y")
+        lbl_month.config(text=month_name)
+        for day_name in ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]:
+            tk.Label(frame_body, text=day_name, width=4, bg="#0E162B", fg="#90A4AE",
+                     font=("Segoe UI", 9, "bold")).pack(side="top")
+        for row in cal_matrix:
+            row_frame = tk.Frame(frame_body, bg="#0B1220")
+            row_frame.pack()
+            for day in row:
+                txt = str(day) if day != 0 else ""
+                is_today = (day == datetime.datetime.now().day and
+                            nav["month"] == datetime.datetime.now().month and
+                            nav["year"] == datetime.datetime.now().year)
+                try:
+                    is_sel = (day != 0 and
+                              day == current.day and
+                              nav["month"] == current.month and
+                              nav["year"] == current.year)
+                except Exception:
+                    is_sel = False
+                bg_col = "#006AFF" if is_sel else ("#1E3A5F" if is_today else "#131D35")
+                fg_col = "white" if is_sel or is_today else "#CFD8DC"
+                btn = tk.Button(
+                    row_frame, text=txt, width=3,
+                    bg=bg_col, fg=fg_col, relief="flat",
+                    font=("Segoe UI", 9),
+                    activebackground="#0040CC",
+                    command=(lambda d=day: pick_day(d)) if day != 0 else None
+                )
+                btn.pack(side="left", padx=1, pady=1)
+
+    def pick_day(day):
+        date_str = f"{nav['year']:04d}-{nav['month']:02d}-{day:02d}"
+        selected_history_date.set(date_str)
+        cal_win.destroy()
+
+    def prev_month():
+        if nav["month"] == 1:
+            nav["month"] = 12
+            nav["year"] -= 1
+        else:
+            nav["month"] -= 1
+        rebuild()
+
+    def next_month():
+        if nav["month"] == 12:
+            nav["month"] = 1
+            nav["year"] += 1
+        else:
+            nav["month"] += 1
+        rebuild()
+
+    frame_nav = tk.Frame(cal_win, bg="#0B1220")
+    frame_nav.pack(fill="x", padx=8, pady=(8, 4))
+    tk.Button(frame_nav, text="◀", command=prev_month, bg="#0E162B", fg="white",
+              font=("Segoe UI", 11), relief="flat", width=3).pack(side="left")
+    lbl_month = tk.Label(frame_nav, text="", bg="#0B1220", fg="#81D4FA",
+                          font=("Segoe UI", 11, "bold"), width=16)
+    lbl_month.pack(side="left", expand=True)
+    tk.Button(frame_nav, text="▶", command=next_month, bg="#0E162B", fg="white",
+              font=("Segoe UI", 11), relief="flat", width=3).pack(side="right")
+
+    frame_body = tk.Frame(cal_win, bg="#0B1220")
+    frame_body.pack(padx=8, pady=(0, 8))
+    rebuild()
+
+btn_open_cal = tk.Button(frame_cal_entry, text="📅 Pick", command=open_calendar_picker,
+                          bg="#006AFF", fg="white", font=("Segoe UI", 9, "bold"), relief="raised", bd=1)
+btn_open_cal.pack(side="left")
+
+# Compatibility shim — view_history / plot_history call .get() on entry_history
+class _DateVar:
+    def get(self):
+        return selected_history_date.get()
+entry_history = _DateVar()
+
+btn_history = tk.Button(card_dx, text="View History", command=lambda: view_history(entry_history.get().strip()), bg="#FFB300", fg="black", font=("Segoe UI", 10, "bold"), relief="raised", bd=2)
 btn_history.pack(padx=10, pady=(0, 4))
 
-btn_plot = tk.Button(panel_stats, text="Plot History", command=lambda: plot_history(entry_history.get().strip()), bg="#00C853", fg="white", font=("Segoe UI", 10, "bold"), relief="raised", bd=2)
+btn_plot = tk.Button(card_dx, text="Plot History", command=lambda: plot_history(entry_history.get().strip()), bg="#00C853", fg="white", font=("Segoe UI", 10, "bold"), relief="raised", bd=2)
 btn_plot.pack(padx=10, pady=(0, 8))
 
 # Controls (BOTTOM - full width)

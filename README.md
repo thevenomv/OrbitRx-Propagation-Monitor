@@ -1,79 +1,141 @@
 # OrbitRx Propagation Monitor
 
-A professional desktop application for HAM radio operators to monitor real-time space weather data and predict HF radio propagation conditions.
+A professional-grade desktop dashboard for HAM radio operators. Monitors real-time space weather, visualises the greyline, plots live DX cluster contacts on a world map, controls your physical radio via CAT, and forecasts propagation up to 24 hours into the future.
 
-## Features
+---
 
-### Real-Time Space Weather Data
-- **Kp Index**: Geomagnetic activity monitoring (0-9 scale)
-- **Solar Flux**: 10cm radio wave intensity for propagation estimates
-- **Sunspot Number**: Current solar activity levels
-- **27-Day Forecast**: F10.7 solar flux predictions
-- **Space Weather Alerts**: NOAA space weather alerts
+## Feature Summary
 
-### Propagation Analysis
-- **MUF (Maximum Usable Frequency)**: Highest frequency for sky wave propagation
-- **LUF (Lowest Usable Frequency)**: Lowest reliable frequency for a given path
-- **Band Conditions**: Real-time assessment of 6 HF bands (160m-10m)
-- **Sunrise/Sunset Times**: UTC times for optimal propagation windows
+### Phase 1 — Real-Time Space Weather
+- **Kp Index** — geomagnetic activity (0–9)
+- **Solar Flux** — 10 cm radio wave intensity from NOAA
+- **Sunspot Number** — predicted from NOAA cycle-25 data
+- **27-Day F10.7 Forecast** — smoothed solar flux range
+- **Space Weather Alerts** — live NOAA alert feed
+- **Kp Forecast** — next 3 readings from NOAA
 
-### Interactive Map
-- **Greyline Visualization**: Day-night terminator line (optimal for DX)
-- **Geographic Gridlines**: Latitude/longitude references
-- **User Location Marker**: Your position on the world map
-- **1600×800 High-Resolution**: Detailed continent and ocean visualization
+### Phase 2 — Propagation Analysis & Map
+- **MUF / LUF** — maximum and lowest usable frequency estimates
+- **Band Conditions** — 160 m – 10 m real-time status (🟢/🟡/🔴)
+- **Sunrise / Sunset UTC** — computed for your exact location
+- **Greyline** — day/night terminator rendered on a full-colour world map
+- **Night-side shading** — semi-transparent overlay marks the dark hemisphere
+- **Sun position marker** — subsolar point shown as ☀️ on the map
+- **Card UI** — Space Weather / Local Station / DX & Events grouped cards
+- **History lookup** — search propagation_log.csv by date or date range
+- **History plot** — matplotlib chart of Kp, Solar Flux, MUF, LUF over time
 
-### Amateur Radio Features
-- **DX Spot Log**: Recent distant station contact opportunities
-- **Contest Scheduler**: Upcoming HF contests and events
-- **Data Logging**: Automatic CSV logging of all readings
-- **JSON Export**: Export readings for external analysis
-- **History Search**: Lookup dense historical values by date/timestamp/range
-- **History Plot**: Visualize Kp/SolarFlux/MUF/LUF trends from logged data
+### Phase 3 — Professional Shack Integration
+
+#### 1. CAT Radio Control (`pyserial`)
+- Click any **purple DX spot** on the map → CAT command tunes your physical rig instantly.
+- Sends Kenwood/Icom-compatible `FA...;` string over the configured COM port.
+- Propagation alarm popup includes a **"Tune to 28.074 FT8"** one-click button.
+- Gracefully degrades if `pyserial` is not installed.
+- Configure `CAT_PORT` and `CAT_BAUD` constants at the top of `app.py`.
+
+#### 2. Live DX Cluster (socket / Telnet)
+- Connects to **ve7cc.net:23** (VE7CC DX cluster) over a persistent background thread.
+- Incoming `DX de …` lines are parsed, geo-coded, and immediately arc-drawn on the map.
+- **Callsign prefix table** resolves 60+ country prefixes to lat/lon with per-spot jitter.
+- Spots auto-expire after **5 minutes** to keep the map clean.
+- Every spot is permanently appended to `dx_spots_log.csv`.
+- Launch throttle: UI updates are batched (max 1 per second) so floods don't freeze the app.
+
+#### 3. Propagation Alarm System
+- Alarm fires when `Kp ≤ 2` **AND** `MUF ≥ 28 MHz` — 10 m is open!
+- Plays `winsound.MessageBeep` for an audible alert.
+- Shows a topmost Tkinter popup with a one-click CAT tune button.
+- Suppressed for 1 hour after each trigger to avoid spam.
+- Also fires on `Kp ≥ 7` as a severe geomagnetic storm warning.
+
+#### 4. Time-Travel Propagation Slider
+- Slider beneath the map projects the greyline **+0 to +24 hours** into the future.
+- Recalculates solar declination, subsolar longitude, night shading, and MUF at the selected time.
+- Timestamp overlay on the map shows the projected UTC time and offset.
+- Ideal for planning contest openings to Japan, Australia, or South America.
+
+## Getting Started
+
+---
 
 ## Getting Started
 
 ### Requirements
-- Windows 7 or later
-- 50 MB disk space
-- Internet connection (for real-time data)
+- Python 3.11+
+- Windows / macOS / Linux
+- Internet connection (real-time data)
 
-### Installation
+### Core dependencies
+```
+pip install pillow matplotlib
+```
 
-**Option 1: Standalone Executable (Recommended)**
-1. Download `RadioPropagationTracker.exe` from the `dist/` folder
-2. Double-click to run
-3. No Python installation required
+### Optional Phase 3 dependencies
+```
+pip install pyserial          # CAT radio control (required for physical rig tuning)
+pip install customtkinter     # modern dark-mode UI
+pip install tkcalendar        # calendar date picker for history
+pip install win10toast        # Windows toast notifications
+```
 
-**Option 2: From Source**
-1. Install Python 3.14+: https://www.python.org/downloads/
-2. Clone or download this repository
-3. Run: `py app.py`
+### Run from source
+```
+py app.py
+```
 
-### First Run
-1. Click **"Refresh Location"** to detect your geographic coordinates
-2. Click **"Refresh Space Weather"** to fetch latest NOAA data
-3. View the greyline on the map to see optimal propagation zones
-4. Check "Help & Guide" button for detailed metric explanations
+### Build standalone `.exe`
+```
+build.bat
+```
+or
+```
+py build_exe.py
+```
+Output: `dist\OrbitRxMonitor.exe`
 
-## User Interface
+---
 
-| Element | Purpose |
-|---------|---------|
-| **Map (Left)** | World map with greyline, gridlines, and your location |
-| **Stats Panel (Right)** | Real-time space weather and propagation metrics |
-| **Buttons (Bottom)** | Refresh, export, and help controls |
+## Configuration
 
-## Understanding the Metrics
+Edit constants at the top of `app.py`:
+
+| Constant | Default | Purpose |
+|----------|---------|---------|
+| `CAT_PORT` | `'COM3'` | Serial port for CAT control |
+| `CAT_BAUD` | `9600` | Baud rate for your transceiver |
+| `CAT_TIMEOUT` | `0.5` | Serial read timeout (seconds) |
+| `DX_CLUSTER_HOST` | `'ve7cc.net'` | Telnet DX cluster hostname |
+| `DX_CLUSTER_PORT` | `23` | Telnet port |
+| `ALERT_KP_THRESHOLD` | `2` | Max Kp to trigger "excellent" alarm |
+| `ALERT_MUF_THRESHOLD` | `28` | Min MUF (MHz) to trigger "excellent" alarm |
+
+---
+
+## UI Layout
+
+| Area | Content |
+|------|---------|
+| Title bar | App name |
+| Map (left) | World map, greyline, night shade, ☀️ sun, DX arcs, "You" marker |
+| Time-travel slider | +0–24 h offset, live greyline redraw |
+| Space Weather card | Kp, Kp forecast, Solar Flux, Sunspot, timestamp |
+| Local Station card | Band conditions, MUF/LUF, sunrise/sunset, alerts, location |
+| DX & Events card | 27-day forecast, next contest, live DX feed, history controls |
+| Button bar | Refresh Location · Refresh Space Weather · Export JSON · Export DX Log · Help |
+
+---
+
+## Propagation Reference
 
 ### Kp Index
-- **0-3**: Quiet conditions, excellent propagation
-- **4-6**: Unsettled, minor degradation
-- **7-9**: Major storm, severe propagation loss possible
+- **0–3**: Quiet conditions, excellent propagation
+- **4–6**: Unsettled, minor degradation
+- **7–9**: Major storm, severe propagation loss possible
 
 ### Solar Flux
-- **60-100**: Low activity, poor long-distance propagation
-- **100-150**: Normal conditions
+- **60–100**: Low activity, poor long-distance propagation
+- **100–150**: Normal conditions
 - **150+**: Excellent propagation expected
 
 ### Band Conditions
@@ -86,104 +148,66 @@ The **orange line** on the map shows where sunrise and sunset occur. This termin
 
 ## Using the Map
 
-1. **Continents (Green)**: Geographic reference for HF paths
-2. **Gridlines**: Latitude/longitude in 15° increments
-3. **Cyan Crosshairs**: Equator and Prime Meridian (0° longitude)
-4. **Orange Curve**: Day-night boundary (greyline) - aim for this
-5. **Green Dot**: Your location (once "Refresh Location" is clicked)
+| Symbol | Meaning |
+|--------|---------|
+| Orange curve | Greyline — day/night terminator |
+| Dark stipple | Night side of Earth |
+| ☀️ yellow dot | Subsolar point |
+| Green dot | Your location |
+| Cyan arc + cyan dot | DX path from spotter |
+| Purple dot | DX target — **click to tune radio** |
+| Yellow label | Callsign pair |
 
-## Data Logging
+---
 
-All readings are automatically logged to `propagation_log.csv`:
-- Timestamp (UTC)
-- Kp Index
-- Solar Flux
-- Sunspot Number
-- MUF/LUF estimates
-- Band Conditions
-- Your coordinates
+## Data Files
 
-Use this historical data to analyze propagation trends.
+| File | Contents |
+|------|---------|
+| `propagation_log.csv` | Timestamped Kp / Solar Flux / MUF readings (auto-appended) |
+| `dx_spots_log.csv` | DX cluster spots — spotter, target, frequency, timestamp |
+| `export.json` | One-shot JSON snapshot of current readings |
+| `world_map.jpg` | Downloaded from Wikimedia on first run |
 
-## Advanced Tips
-
-### For Best DX Results
-1. **Operate on the greyline** - Use the map to find optimal zones
-2. **Check solar flux** - Wait for peaks above 150 sfu for long distance
-3. **Monitor Kp Index** - Avoid operating during major geomagnetic storms (Kp > 5)
-4. **Use sunrise/sunset times** - Plan operating windows around these times
-5. **Check band conditions** - Only use bands with green (EXCELLENT) rating
-
-### For Casual Operating
-1. Keep the app running in the background for real-time alerts
-2. Check band conditions before switching frequencies
-3. Use MUF estimate to avoid wasting time on dead frequencies
-4. Monitor alerts for sudden space weather changes
-
-## Keyboard Shortcuts
-- **Ctrl+Q**: Quit application
-- **Ctrl+R**: Refresh space weather data
-- **Ctrl+L**: Refresh location
-- **Ctrl+H**: Open help guide
+---
 
 ## Troubleshooting
 
-### "Location unknown" appears
-- Check your internet connection
-- Try clicking "Refresh Location" again
-- The app uses your public IP to estimate location
+| Problem | Fix |
+|---------|-----|
+| "Location unknown" | Check internet; click Refresh Location |
+| Map not showing | Ensure `world_map.jpg` is in the same folder; delete & restart to re-download |
+| No data | Click Refresh Space Weather; check https://www.swpc.noaa.gov/ |
+| DX arcs not appearing | Cluster connection in progress (may take 10–30 s); check console |
+| CAT not working | Verify `CAT_PORT` in app.py matches Device Manager COM port |
 
-### Map not displaying
-- Ensure `world_map.jpg` is in the same folder as `app.py`
-- If running executable, map should be bundled automatically
-- Try restarting the application
-
-### No data showing
-- Click "Refresh Space Weather" button
-- Check internet connection
-- Wait 60 seconds for automatic refresh
-- Check NOAA status at: https://www.swpc.noaa.gov/
-
-### CSV file contains strange characters
-- The app automatically sanitizes emoji characters for compatibility
-- Export as JSON instead for Unicode support
+---
 
 ## Data Sources
+- **NOAA SWPC** — Kp, solar flux, sunspots, alerts, forecasts
+- **ipinfo.io** — IP-based geolocation
+- **VE7CC DX cluster** — Live DX spot feed (Telnet)
+- **Wikimedia** — High-resolution world map base image
 
-- **NOAA SWPC**: Real-time space weather data
-- **ipinfo.io**: Geolocation services
-- **Historical Data**: Internal CSV logging
+---
 
 ## File Structure
 
 ```
 mypythonapp/
-├── app.py                      # Main application
-├── generate_map.py             # Map generation script
-├── world_map.jpg              # High-resolution map image
-├── propagation_log.csv        # Historical data log
-└── README.md                  # This file
+├── app.py                      # Main application (Phase 1–3)
+├── generate_map.py             # Map downloader with synthetic fallback
+├── build.bat                   # One-click PyInstaller build
+├── build_exe.py                # Python build helper
+├── RadioPropagationTracker.spec# PyInstaller spec
+├── README.md                   # This file
+├── world_map.jpg               # Cached world map image
+├── propagation_log.csv         # Auto-generated propagation log
+├── dx_spots_log.csv            # Auto-generated DX spot log
+└── export.json                 # Last JSON export snapshot
 ```
-
-## License
-
-Open-source for HAM radio community use.
-
-## Contributing
-
-Ideas for improvements:
-- Real DX Cluster API integration
-- Daily propagation forecast emails
-- Multi-band visualization overlays
-- Historical trend graphing
-- Beacon frequency recommendations
-
-## Support
-
-For issues or suggestions, check the "Help & Guide" button in the app for detailed explanations of all features and metrics.
 
 ---
 
-**Last Updated**: March 28, 2026
-**Version**: 1.0 Beta
+**Version**: 3.0  |  **Updated**: March 2026
 **Tested On**: Windows 10/11, Python 3.14+
