@@ -52,7 +52,7 @@ import math
 import datetime
 import csv
 import os
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 from functools import lru_cache
 
 # --- USER LOCATION ---
@@ -68,7 +68,7 @@ CAT_TIMEOUT = 0.5
 serial_conn = None
 
 # DX cluster
-DX_CLUSTER_HOST = 've7cc.net'
+DX_CLUSTER_HOST = 'dxc.ve7cc.net'
 DX_CLUSTER_PORT = 23
 cluster_active = False
 cluster_thread = None
@@ -88,6 +88,8 @@ flux = None
 muf = None
 luf = None
 bands = "--"
+current_map_photo = None  # keeps PIL-composited PhotoImage alive
+original_map = None       # set after window creation
 
 def fetch_json(url):
     """Helper function to fetch JSON data with a standard web browser User-Agent."""
@@ -504,54 +506,62 @@ def start_dx_cluster():
 def dx_cluster_task():
     global latest_dx_spots, cluster_active, dx_update_pending
     import random
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(5)
-        s.connect((DX_CLUSTER_HOST, DX_CLUSTER_PORT))
-        
-        # Wait for the server login prompt and clear the buffer
-        time.sleep(1.5)
+    while cluster_active:
         try:
-            s.recv(1024)
-        except socket.timeout:
-            pass
-        # Many nodes block 'N0CALL' and 'GUEST', use a valid format instead
-        s.sendall(b"W1AW-9\r\n")
-        s.settimeout(None)
-        
-        buffer = ""
-        while cluster_active:
-            data = s.recv(1024)
-            if not data: break
-            buffer += data.decode('ascii', errors='ignore')
-            while '\n' in buffer:
-                line, buffer = buffer.split('\n', 1)
-                line = line.strip()
-                if line.startswith("DX de"):
-                    parts = line.split()
-                    if len(parts) >= 5:
-                        spotter = parts[2].strip(':')
-                        freq = parts[3]
-                        to_station = parts[4]
-                        spot = {"from": spotter, "to": to_station, "freq": freq, "time": time.time()}
-                        
-                        log_dx_spot(spotter, to_station, freq)
-                        
-                        if spotter not in DX_COORDINATES:
-                            DX_COORDINATES[spotter] = estimate_location(spotter)
-                        if to_station not in DX_COORDINATES:
-                            DX_COORDINATES[to_station] = estimate_location(to_station)
-                        
-                        latest_dx_spots.insert(0, spot)
-                        latest_dx_spots = latest_dx_spots[:50]
-                        
-                        # Throttle UI updates so a flood of spots doesn't freeze the map
-                        if not dx_update_pending:
-                            dx_update_pending = True
-                            window.after(1000, update_dx_ui)
-    except Exception as e:
-        print("DX Cluster disconnected:", e)
-        cluster_active = False
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(10)
+            s.connect((DX_CLUSTER_HOST, DX_CLUSTER_PORT))
+
+            # Drain banner
+            time.sleep(1.5)
+            try:
+                s.recv(2048)
+            except socket.timeout:
+                pass
+            s.sendall(b"W1AW-9\r\n")
+            s.settimeout(None)
+
+            buffer = ""
+            while cluster_active:
+                data = s.recv(1024)
+                if not data:
+                    break
+                buffer += data.decode('ascii', errors='ignore')
+                while '\n' in buffer:
+                    line, buffer = buffer.split('\n', 1)
+                    line = line.strip()
+                    if line.startswith("DX de"):
+                        parts = line.split()
+                        if len(parts) >= 5:
+                            spotter = parts[2].strip(':')
+                            freq = parts[3]
+                            to_station = parts[4]
+                            spot = {"from": spotter, "to": to_station, "freq": freq, "time": time.time()}
+
+                            log_dx_spot(spotter, to_station, freq)
+
+                            if spotter not in DX_COORDINATES:
+                                DX_COORDINATES[spotter] = estimate_location(spotter)
+                            if to_station not in DX_COORDINATES:
+                                DX_COORDINATES[to_station] = estimate_location(to_station)
+
+                            latest_dx_spots.insert(0, spot)
+                            latest_dx_spots = latest_dx_spots[:50]
+
+                            if not dx_update_pending:
+                                dx_update_pending = True
+                                window.after(500, update_dx_ui)
+        except Exception as e:
+            print(f"DX Cluster disconnected ({DX_CLUSTER_HOST}:{DX_CLUSTER_PORT}): {e}")
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+        if not cluster_active:
+            break
+        # Wait 30 s before reconnecting
+        time.sleep(30)
 
 def update_dx_ui():
     global dx_update_pending, latest_dx_spots
@@ -565,7 +575,7 @@ def update_dx_ui():
         lbl_dx.config(text="Live DX: " + dx_text)
     else:
         lbl_dx.config(text="Live DX: --")
-        draw_greyline()
+    draw_greyline()
 
 def tune_radio(freq_mhz):
     try:
@@ -783,62 +793,64 @@ def get_space_weather():
 
 # --- GREYLINE MATH & DRAWING ---
 def draw_greyline():
-    global latest_dx_canvas_points
+    global latest_dx_canvas_points, current_map_photo
     canvas.delete("all")
     width = 700
     height = 560
-    
-    # 1. Check if we have the map image, otherwise draw the dark grid
-    if map_image:
-        # Place the image in the center of the canvas
-        canvas.create_image(width/2, height/2, image=map_image)
+
+    # 1. Build the base PIL image (world map or solid fallback)
+    if original_map is not None:
+        base = original_map.copy().convert("RGBA")
     else:
-        # Fallback if the image isn't found
-        canvas.create_rectangle(0, 0, width, height, fill="#101820") 
-        canvas.create_line(0, height/2, width, height/2, fill="#333", dash=(4,4))
-        canvas.create_line(width/2, 0, width/2, height, fill="#333", dash=(4,4))
-    
-    # 2. Get Time and Math Setup
+        base = Image.new("RGBA", (width, height), (16, 24, 32, 255))
+
+    # 2. Greyline math
     now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=slider_offset_hours)
     day_of_year = now.timetuple().tm_yday
     hour_utc = now.hour + now.minute / 60.0
-    
-    declination_deg = -23.44 * math.cos(math.radians((360/365.25) * (day_of_year + 10)))
+
+    declination_deg = -23.44 * math.cos(math.radians((360 / 365.25) * (day_of_year + 10)))
     declination_rad = math.radians(declination_deg)
-    
     sun_lon_deg = 180 - (hour_utc * 15)
     sun_lon_rad = math.radians(sun_lon_deg)
-    
-    # 3. Plot the Wave
-    points = []
-    for x in range(width + 1):
-        lon_deg = (x / width) * 360 - 180
-        lon_rad = math.radians(lon_deg)
-        
-        tan_dec = math.tan(declination_rad)
-        if abs(tan_dec) < 0.0001: tan_dec = 0.0001 
-        
-        tan_lat = -math.cos(lon_rad - sun_lon_rad) / tan_dec
-        lat_deg = math.degrees(math.atan(tan_lat))
-        
-        y = height/2 - (lat_deg / 90) * (height/2)
-        points.extend((x, y))
-        
-    # Night shading based on subsolar longitude
+
+    # 3. Build night-overlay and terminator using PIL (no Tkinter stipple needed)
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+
+    # Night columns  (semi-transparent black, alpha 120/255 ≈ 47%)
     for x in range(width):
         lon_deg = (x / width) * 360 - 180
         angle_diff = (lon_deg - sun_lon_deg + 180) % 360 - 180
-        # Night when absolute hour angle > 90 degrees
         if abs(angle_diff) > 90:
-            canvas.create_line(x, 0, x, height, fill="#000000", stipple="gray50")
+            od.line([(x, 0), (x, height - 1)], fill=(0, 0, 0, 120))
 
-    # Draw the blazing neon orange terminator line on top of the map
-    canvas.create_line(points, fill="#FF4500", width=3, smooth=True)
+    # Terminator line as a thick polyline on the overlay
+    term_points = []
+    for x in range(width + 1):
+        lon_deg = (x / width) * 360 - 180
+        lon_rad = math.radians(lon_deg)
+        tan_dec = math.tan(declination_rad)
+        if abs(tan_dec) < 0.0001:
+            tan_dec = 0.0001
+        tan_lat = -math.cos(lon_rad - sun_lon_rad) / tan_dec
+        lat_deg = math.degrees(math.atan(tan_lat))
+        y = int(height / 2 - (lat_deg / 90) * (height / 2))
+        y = max(0, min(height - 1, y))
+        term_points.append((x, y))
 
-    # Draw a little text box background so the time is readable over the map
-    canvas.create_rectangle(5, 5, 300, 35, fill="#101820", outline="")
-    time_text = f"Greyline Calculated @ {now.strftime('%H:%M UTC')}" + (f" (+{slider_offset_hours}h)" if slider_offset_hours > 0 else "")
-    canvas.create_text(10, 10, anchor="nw", text=time_text, fill="white", font=("Arial", 11))
+    if len(term_points) > 1:
+        od.line(term_points, fill=(255, 80, 0, 240), width=3)
+
+    # 4. Composite and create a single PhotoImage for the canvas
+    combined = Image.alpha_composite(base, overlay).convert("RGB")
+    current_map_photo = ImageTk.PhotoImage(combined)
+    canvas.create_image(width / 2, height / 2, image=current_map_photo)
+
+    # 5. Overlay HUD text on the canvas
+    time_text = f"Greyline @ {now.strftime('%H:%M UTC')}" + (f"  (+{slider_offset_hours:.1f}h)" if slider_offset_hours else "")
+    canvas.create_rectangle(5, 5, 310, 30, fill="#0B1220", outline="")
+    canvas.create_text(10, 8, anchor="nw", text=time_text, fill="white", font=("Arial", 11))
 
     def world_to_canvas(lat, lon):
         cx = ((lon + 180) / 360) * width
@@ -847,56 +859,56 @@ def draw_greyline():
 
     latest_dx_canvas_points = []
 
-    # Plot Subsolar Point (Sun)
+    # 6. Sun marker
     sun_lon_wrapped = (sun_lon_deg + 180) % 360 - 180
     sun_x, sun_y = world_to_canvas(declination_deg, sun_lon_wrapped)
-    canvas.create_oval(sun_x-12, sun_y-12, sun_x+12, sun_y+12, fill="#FFEB3B", outline="#FFA000", width=2)
-    canvas.create_oval(sun_x-20, sun_y-20, sun_x+20, sun_y+20, outline="#FFE082", dash=(2,2))
-    canvas.create_text(sun_x, sun_y, text="☀️", font=("Segoe UI", 10))
+    canvas.create_oval(sun_x - 12, sun_y - 12, sun_x + 12, sun_y + 12, fill="#FFEB3B", outline="#FFA000", width=2)
+    canvas.create_oval(sun_x - 20, sun_y - 20, sun_x + 20, sun_y + 20, outline="#FFE082", dash=(2, 2))
+    canvas.create_text(sun_x, sun_y, text="\u2600", font=("Arial", 10), fill="#FFA000")
 
-    # Plot user location marker if available
+    # 7. User location marker
     if user_lat is not None and user_lon is not None:
         px, py = world_to_canvas(user_lat, user_lon)
         if 0 <= px <= width and 0 <= py <= height:
-            canvas.create_oval(px-7, py-7, px+7, py+7, fill="#00FF00", outline="#00FF00", width=2)
+            canvas.create_oval(px - 7, py - 7, px + 7, py + 7, fill="#00FF00", outline="white", width=2)
+            canvas.create_rectangle(px + 10, py - 18, px + 44, py - 4, fill="#0B1220", outline="")
             canvas.create_text(px + 12, py - 10, text="You", fill="white", font=("Arial", 11, "bold"), anchor="w")
 
-    # Plot Great Circle DX arcs for each spot
+    # 8. DX arcs
     for spot in latest_dx_spots:
         from_name = spot.get('from')
         to_name = spot.get('to')
         fpos = DX_COORDINATES.get(from_name)
         tpos = DX_COORDINATES.get(to_name)
-        if fpos and tpos:
-            fx, fy = world_to_canvas(fpos[0], fpos[1])
-            tx, ty = world_to_canvas(tpos[0], tpos[1])
-            
-            # Only draw lines that don't wrap all the way across the dateline
-            if abs(fx - tx) < width * 0.6:
-                mx, my = (fx + tx) / 2, (fy + ty) / 2
-                distance = math.hypot(tx - fx, ty - fy)
-                # Bend curve towards the nearest pole to simulate 2D great circle routing
-                cy = my - (distance * 0.15) if my < height / 2 else my + (distance * 0.15)
-                canvas.create_line(fx, fy, mx, cy, tx, ty, smooth=True, fill="#00FFFF", width=1.5, dash=(4,2))
-            
-            # Spotter (FROM) — orange diamond with callsign
-            canvas.create_polygon(
-                fx, fy-7, fx+7, fy, fx, fy+7, fx-7, fy,
-                fill="#FF9800", outline="#FFFFFF", width=1
-            )
-            canvas.create_text(fx, fy - 12, text=from_name, fill="#FFC44D", font=("Arial", 8, "bold"), anchor="s")
+        if not fpos or not tpos:
+            continue
+        fx, fy = world_to_canvas(fpos[0], fpos[1])
+        tx, ty = world_to_canvas(tpos[0], tpos[1])
 
-            # Target (TO) — purple dot with callsign
-            canvas.create_oval(tx-6, ty-6, tx+6, ty+6, fill="#FF00FF", outline="#FFFFFF", width=1)
-            canvas.create_text(tx + 9, ty - 10, text=to_name, fill="#FFFF66", font=("Arial", 8, "bold"), anchor="w")
+        # Arc (skip dateline wrap)
+        if abs(fx - tx) < width * 0.6:
+            mx, my = (fx + tx) / 2, (fy + ty) / 2
+            curve_y = my - math.hypot(tx - fx, ty - fy) * 0.15
+            canvas.create_line(fx, fy, mx, curve_y, tx, ty, smooth=True,
+                               fill="#00FFFF", width=2, dash=(5, 3))
 
-            # Freq label at midpoint of arc
-            mid_x = (fx + tx) / 2
-            mid_y = (fy + ty) / 2 - 14
-            canvas.create_text(mid_x, mid_y, text=f"{spot.get('freq','?')} MHz", fill="#00FFCC", font=("Arial", 8), anchor="center")
+        # Spotter — orange diamond
+        canvas.create_polygon(fx, fy - 7, fx + 7, fy, fx, fy + 7, fx - 7, fy,
+                              fill="#FF9800", outline="#FFFFFF", width=1)
+        canvas.create_text(fx, fy - 13, text=from_name, fill="#FFC44D",
+                           font=("Arial", 8, "bold"), anchor="s")
 
-            # Save canvas coordinates so map clicks successfully tune the radio!
-            latest_dx_canvas_points.append((tx, ty, spot.get('freq', '14.000')))
+        # Target — magenta circle
+        canvas.create_oval(tx - 6, ty - 6, tx + 6, ty + 6, fill="#FF00FF", outline="#FFFFFF", width=1)
+        canvas.create_text(tx + 9, ty - 10, text=to_name, fill="#FFFF66",
+                           font=("Arial", 8, "bold"), anchor="w")
+
+        # Frequency at arc midpoint
+        canvas.create_text((fx + tx) / 2, (fy + ty) / 2 - 14,
+                           text=f"{spot.get('freq', '?')} MHz",
+                           fill="#00FFCC", font=("Arial", 8), anchor="center")
+
+        latest_dx_canvas_points.append((tx, ty, spot.get('freq', '14.000')))
 
 # --- AUTO-REFRESH TIMER ---
 def auto_refresh():
@@ -1324,6 +1336,20 @@ btn_help.pack(side="left", padx=4)
 # Initialize logging and start app
 init_log_file()
 init_dx_log_file()
+
+# Seed demo DX spots so arcs render immediately even before cluster connects
+_demo_spots = [
+    {"from": "W5XYZ",  "to": "PY2AB",  "freq": "28.456", "time": time.time()},
+    {"from": "VE3ABC", "to": "XU7AJ",  "freq": "21.285", "time": time.time()},
+    {"from": "G3ZYZ",  "to": "JA1ABC", "freq": "14.195", "time": time.time()},
+]
+for _s in _demo_spots:
+    if _s["from"] not in DX_COORDINATES:
+        DX_COORDINATES[_s["from"]] = estimate_location(_s["from"])
+    if _s["to"] not in DX_COORDINATES:
+        DX_COORDINATES[_s["to"]] = estimate_location(_s["to"])
+latest_dx_spots.extend(_demo_spots)
+
 start_dx_cluster()
 auto_refresh()
 
