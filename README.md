@@ -1,4 +1,4 @@
-# Radio Propagation Tracker
+# OrbitRx Propagation Monitor
 
 A professional desktop application for HAM radio operators to monitor real-time space weather data and predict HF radio propagation conditions.
 
@@ -28,6 +28,8 @@ A professional desktop application for HAM radio operators to monitor real-time 
 - **Contest Scheduler**: Upcoming HF contests and events
 - **Data Logging**: Automatic CSV logging of all readings
 - **JSON Export**: Export readings for external analysis
+- **History Search**: Lookup dense historical values by date/timestamp/range
+- **History Plot**: Visualize Kp/SolarFlux/MUF/LUF trends from logged data
 
 ## Getting Started
 
