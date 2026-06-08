@@ -61,6 +61,22 @@ Or from the repository root:
 python app.py
 ```
 
+### Desktop launcher (Windows)
+
+Run once to create a folder on your Desktop with double-click launchers:
+
+```bat
+scripts\setup_desktop.bat
+```
+
+This creates `%USERPROFILE%\Desktop\OrbitRx\` with:
+
+| File | Purpose |
+|------|---------|
+| `Install OrbitRx.bat` | Installs Python dependencies (run once) |
+| `Run OrbitRx.bat` | Starts the app |
+| `Open Data Folder.bat` | Opens `~/.orbitrx` (logs and exports) |
+
 ### Build standalone `.exe` (Windows)
 
 ```bash
