@@ -63,19 +63,24 @@ python app.py
 
 ### Desktop launcher (Windows)
 
-Run once to create a folder on your Desktop with double-click launchers:
+**One-time setup on your PC** — double-click this file in the repo root:
 
 ```bat
-scripts\setup_desktop.bat
+Setup Desktop.bat
 ```
 
-This creates `%USERPROFILE%\Desktop\OrbitRx\` with:
+This automatically:
+1. Creates `Desktop\OrbitRx\` on your Windows machine
+2. Installs Python dependencies
+3. Opens the new folder when done
 
-| File | Purpose |
-|------|---------|
-| `Install OrbitRx.bat` | Installs Python dependencies (run once) |
-| `Run OrbitRx.bat` | Starts the app |
-| `Open Data Folder.bat` | Opens `~/.orbitrx` (logs and exports) |
+Then use **`Run OrbitRx.bat`** on your Desktop every time you want to start the app.
+
+| Desktop file | Purpose |
+|--------------|---------|
+| `Install OrbitRx.bat` | Re-install / update dependencies |
+| `Run OrbitRx.bat` | Start the app |
+| `Open Data Folder.bat` | Opens logs and exports in `~/.orbitrx` |
 
 ### Build standalone `.exe` (Windows)
 
