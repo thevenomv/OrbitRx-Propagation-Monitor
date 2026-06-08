@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orbitrx"
+version = "3.0.0"
+description = "HF radio propagation monitor with space weather, greyline map, and DX cluster"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pillow>=10.0",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+full = [
+    "pyserial",
+    "customtkinter",
+    "tkcalendar",
+    "win10toast",
+]
+dev = [
+    "pyinstaller>=6.0",
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+build = [
+    "pyinstaller>=6.0",
+]
+
+[project.scripts]
+orbitrx = "orbitrx.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

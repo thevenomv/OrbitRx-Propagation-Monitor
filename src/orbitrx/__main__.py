@@ -1,5 +1,3 @@
-"""Backward-compatible entry point at repository root."""
-
 from orbitrx.app import main
 
 if __name__ == "__main__":

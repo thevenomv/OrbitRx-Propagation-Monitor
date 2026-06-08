@@ -16,46 +16,17 @@ A professional-grade desktop dashboard for HAM radio operators. Monitors real-ti
 
 ### Phase 2 — Propagation Analysis & Map
 - **MUF / LUF** — maximum and lowest usable frequency estimates
-- **Band Conditions** — 160 m – 10 m real-time status (🟢/🟡/🔴)
+- **Band Conditions** — 160 m – 10 m real-time status
 - **Sunrise / Sunset UTC** — computed for your exact location
 - **Greyline** — day/night terminator rendered on a full-colour world map
-- **Night-side shading** — semi-transparent overlay marks the dark hemisphere
-- **Sun position marker** — subsolar point shown as ☀️ on the map
-- **Card UI** — Space Weather / Local Station / DX & Events grouped cards
-- **History lookup** — search propagation_log.csv by date or date range
+- **History lookup** — search propagation logs by date or date range
 - **History plot** — matplotlib chart of Kp, Solar Flux, MUF, LUF over time
 
 ### Phase 3 — Professional Shack Integration
-
-#### 1. CAT Radio Control (`pyserial`)
-- Click any **purple DX spot** on the map → CAT command tunes your physical rig instantly.
-- Sends Kenwood/Icom-compatible `FA...;` string over the configured COM port.
-- Propagation alarm popup includes a **"Tune to 28.074 FT8"** one-click button.
-- Gracefully degrades if `pyserial` is not installed.
-- Configure `CAT_PORT` and `CAT_BAUD` constants at the top of `app.py`.
-
-#### 2. Live DX Cluster (socket / Telnet)
-- Connects to **ve7cc.net:23** (VE7CC DX cluster) over a persistent background thread.
-- Incoming `DX de …` lines are parsed, geo-coded, and immediately arc-drawn on the map.
-- **Callsign prefix table** resolves 60+ country prefixes to lat/lon with per-spot jitter.
-- Spots auto-expire after **5 minutes** to keep the map clean.
-- Every spot is permanently appended to `dx_spots_log.csv`.
-- Launch throttle: UI updates are batched (max 1 per second) so floods don't freeze the app.
-
-#### 3. Propagation Alarm System
-- Alarm fires when `Kp ≤ 2` **AND** `MUF ≥ 28 MHz` — 10 m is open!
-- Plays `winsound.MessageBeep` for an audible alert.
-- Shows a topmost Tkinter popup with a one-click CAT tune button.
-- Suppressed for 1 hour after each trigger to avoid spam.
-- Also fires on `Kp ≥ 7` as a severe geomagnetic storm warning.
-
-#### 4. Time-Travel Propagation Slider
-- Slider beneath the map projects the greyline **+0 to +24 hours** into the future.
-- Recalculates solar declination, subsolar longitude, night shading, and MUF at the selected time.
-- Timestamp overlay on the map shows the projected UTC time and offset.
-- Ideal for planning contest openings to Japan, Australia, or South America.
-
-## Getting Started
+- **CAT Radio Control** — click DX spots to tune your rig via serial
+- **Live DX Cluster** — telnet feed from VE7CC, arcs on map
+- **Propagation Alarm** — alerts when 10 m conditions are excellent
+- **Time-Travel Slider** — project greyline +0 to +24 hours
 
 ---
 
@@ -66,120 +37,144 @@ A professional-grade desktop dashboard for HAM radio operators. Monitors real-ti
 - Windows / macOS / Linux
 - Internet connection (real-time data)
 
-### Core dependencies
-```
-pip install pillow matplotlib
+### Install
+
+```bash
+pip install -e ".[full]"
 ```
 
-### Optional Phase 3 dependencies
-```
-pip install pyserial          # CAT radio control (required for physical rig tuning)
-pip install customtkinter     # modern dark-mode UI
-pip install tkcalendar        # calendar date picker for history
-pip install win10toast        # Windows toast notifications
+Core only (no CAT or modern UI extras):
+
+```bash
+pip install -e .
 ```
 
-### Run from source
-```
-py app.py
+### Run
+
+```bash
+python -m orbitrx
 ```
 
-### Build standalone `.exe`
+Or from the repository root:
+
+```bash
+python app.py
 ```
-build.bat
+
+### Build standalone `.exe` (Windows)
+
+```bash
+pip install -e ".[full,build]"
+python scripts/build_exe.py
 ```
-or
+
+Or:
+
+```bash
+scripts\build.bat
 ```
-py build_exe.py
-```
-Output: `dist\OrbitRxMonitor.exe`
+
+Output: `dist/OrbitRxMonitor.exe`
 
 ---
 
 ## Configuration
 
-Edit constants at the top of `app.py`:
+Edit constants in `src/orbitrx/config.py`:
 
 | Constant | Default | Purpose |
 |----------|---------|---------|
 | `CAT_PORT` | `'COM3'` | Serial port for CAT control |
 | `CAT_BAUD` | `9600` | Baud rate for your transceiver |
-| `CAT_TIMEOUT` | `0.5` | Serial read timeout (seconds) |
-| `DX_CLUSTER_HOST` | `'ve7cc.net'` | Telnet DX cluster hostname |
-| `DX_CLUSTER_PORT` | `23` | Telnet port |
+| `DX_CLUSTER_HOST` | `'dxc.ve7cc.net'` | Telnet DX cluster hostname |
 | `ALERT_KP_THRESHOLD` | `2` | Max Kp to trigger "excellent" alarm |
 | `ALERT_MUF_THRESHOLD` | `28` | Min MUF (MHz) to trigger "excellent" alarm |
 
----
+Override the data directory (logs, exports, cached map):
 
-## UI Layout
+```bash
+export ORBITRX_DATA=/path/to/my/data   # Linux/macOS
+set ORBITRX_DATA=C:\OrbitRx\Data       # Windows
+```
 
-| Area | Content |
-|------|---------|
-| Title bar | App name |
-| Map (left) | World map, greyline, night shade, ☀️ sun, DX arcs, "You" marker |
-| Time-travel slider | +0–24 h offset, live greyline redraw |
-| Space Weather card | Kp, Kp forecast, Solar Flux, Sunspot, timestamp |
-| Local Station card | Band conditions, MUF/LUF, sunrise/sunset, alerts, location |
-| DX & Events card | 27-day forecast, next contest, live DX feed, history controls |
-| Button bar | Refresh Location · Refresh Space Weather · Export JSON · Export DX Log · Help |
+Default data directory: `~/.orbitrx`
 
 ---
 
-## Propagation Reference
+## File Structure
 
-### Kp Index
-- **0–3**: Quiet conditions, excellent propagation
-- **4–6**: Unsettled, minor degradation
-- **7–9**: Major storm, severe propagation loss possible
-
-### Solar Flux
-- **60–100**: Low activity, poor long-distance propagation
-- **100–150**: Normal conditions
-- **150+**: Excellent propagation expected
-
-### Band Conditions
-- 🟢 **GREEN (EXCELLENT)**: All bands open, excellent DX conditions
-- 🟡 **YELLOW (FAIR)**: Some bands open, limited range
-- 🔴 **RED (CLOSED)**: Poor propagation, local-only contacts
-
-### The Greyline
-The **orange line** on the map shows where sunrise and sunset occur. This terminator line is where HF propagation is **strongest** because signals can skip off the ionosphere at shallow angles. Best DX contacts occur along the greyline.
-
-## Using the Map
-
-| Symbol | Meaning |
-|--------|---------|
-| Orange curve | Greyline — day/night terminator |
-| Dark stipple | Night side of Earth |
-| ☀️ yellow dot | Subsolar point |
-| Green dot | Your location |
-| Cyan arc + cyan dot | DX path from spotter |
-| Purple dot | DX target — **click to tune radio** |
-| Yellow label | Callsign pair |
+```
+orbitrx/
+├── pyproject.toml
+├── README.md
+├── .gitignore
+├── app.py                          # backward-compatible entry point
+│
+├── src/orbitrx/
+│   ├── __main__.py                 # python -m orbitrx
+│   ├── app.py                      # thin bootstrap
+│   ├── config.py                   # constants and band definitions
+│   ├── paths.py                    # data dir and bundled asset resolution
+│   ├── compat.py                   # optional dependency detection
+│   │
+│   ├── models/
+│   │   ├── state.py                # AppState dataclass
+│   │   └── context.py              # AppContext + UIRefs
+│   │
+│   ├── services/
+│   │   ├── noaa.py                 # NOAA space weather API
+│   │   ├── propagation.py          # MUF/LUF, sun times, history parsing
+│   │   ├── geolocation.py          # IP-based location
+│   │   ├── dx_cluster.py           # telnet DX feed + prefix geocoding
+│   │   ├── cat.py                  # serial radio control
+│   │   └── logging.py              # CSV logs and JSON export
+│   │
+│   ├── ui/
+│   │   ├── main_window.py          # layout and event wiring
+│   │   ├── map_canvas.py           # greyline and DX arc rendering
+│   │   ├── history.py              # lookup and matplotlib plots
+│   │   └── dialogs.py              # help and export dialogs
+│   │
+│   └── assets/
+│       ├── map.py                  # map download + synthetic fallback
+│       └── bundled/world_map.jpg   # shipped with PyInstaller builds
+│
+├── scripts/
+│   ├── build.bat
+│   ├── build_exe.py
+│   └── inspect_noaa.py             # dev-only NOAA API probe
+│
+├── packaging/
+│   └── orbitrx.spec                # canonical PyInstaller spec
+│
+└── tests/
+    ├── test_propagation.py
+    ├── test_dx_parser.py
+    └── test_prefix_map.py
+```
 
 ---
 
-## Data Files
+## Runtime Data Files
+
+Stored under `~/.orbitrx` (or `$ORBITRX_DATA`):
 
 | File | Contents |
-|------|---------|
-| `propagation_log.csv` | Timestamped Kp / Solar Flux / MUF readings (auto-appended) |
-| `dx_spots_log.csv` | DX cluster spots — spotter, target, frequency, timestamp |
-| `export.json` | One-shot JSON snapshot of current readings |
-| `world_map.jpg` | Downloaded from Wikimedia on first run |
+|------|----------|
+| `propagation_log.csv` | Timestamped Kp / Solar Flux / MUF readings |
+| `dx_spots_log.csv` | DX cluster spots |
+| `export.json` | Last JSON export snapshot |
+| `world_map.jpg` | Cached world map (downloaded on first run) |
 
 ---
 
-## Troubleshooting
+## Development
 
-| Problem | Fix |
-|---------|-----|
-| "Location unknown" | Check internet; click Refresh Location |
-| Map not showing | Ensure `world_map.jpg` is in the same folder; delete & restart to re-download |
-| No data | Click Refresh Space Weather; check https://www.swpc.noaa.gov/ |
-| DX arcs not appearing | Cluster connection in progress (may take 10–30 s); check console |
-| CAT not working | Verify `CAT_PORT` in app.py matches Device Manager COM port |
+```bash
+pip install -e ".[dev]"
+pytest
+python -m py_compile app.py
+```
 
 ---
 
@@ -191,23 +186,5 @@ The **orange line** on the map shows where sunrise and sunset occur. This termin
 
 ---
 
-## File Structure
-
-```
-mypythonapp/
-├── app.py                      # Main application (Phase 1–3)
-├── generate_map.py             # Map downloader with synthetic fallback
-├── build.bat                   # One-click PyInstaller build
-├── build_exe.py                # Python build helper
-├── RadioPropagationTracker.spec# PyInstaller spec
-├── README.md                   # This file
-├── world_map.jpg               # Cached world map image
-├── propagation_log.csv         # Auto-generated propagation log
-├── dx_spots_log.csv            # Auto-generated DX spot log
-└── export.json                 # Last JSON export snapshot
-```
-
----
-
-**Version**: 3.0  |  **Updated**: March 2026
-**Tested On**: Windows 10/11, Python 3.14+
+**Version**: 3.0  |  **Updated**: June 2026  
+**Tested On**: Windows 10/11, Linux, Python 3.11+
