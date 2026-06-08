@@ -1,0 +1,34 @@
+ORBITRX v5 — HOW TO SEE THE NEW UI
+==================================
+
+You must run from THIS folder:
+  C:\Users\sible\OneDrive\Desktop\OrbitRx-Propagation-Monitor
+
+DO NOT use:
+  - OrbitRx-Propagation-Monitor-review  (old review clone, no v5 code)
+  - dist\RadioPropagationTracker.exe    (old v1 exe, NOT updated)
+  - dist\OrbitRxMonitor.exe             (only valid AFTER running build.bat)
+
+TO LAUNCH v5 NOW:
+  1. Double-click:  run.bat
+     OR in terminal:  python app.py
+
+YOU SHOULD SEE:
+  - Window title: "OrbitRx v5 — Qt Map 900×720 [SOURCE BUILD]"
+  - Green banner at top of map panel
+  - Layer checkboxes: Greyline, Night, DX, Aurora, Grid
+  - Larger map than before
+
+Terminal should print:
+  OrbitRx Propagation Monitor v5.0.0
+  UI: PySide6 (Qt) — v5 map with zoom/pan and layer toggles
+
+IF YOU STILL SEE THE OLD UI:
+  - Close all OrbitRx windows
+  - Check terminal cwd matches this folder
+  - Run: pip install -r requirements.txt
+  - Run: python app.py
+
+TO BUILD A NEW .EXE (optional):
+  build.bat
+  Then run: dist\OrbitRxMonitor.exe

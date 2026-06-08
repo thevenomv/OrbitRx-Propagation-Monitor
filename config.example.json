@@ -1,0 +1,29 @@
+{
+  "cat_port": "COM3",
+  "cat_baud": 9600,
+  "cat_rig_profile": "kenwood",
+  "cat_confirm_before_tune": true,
+  "dx_cluster_host": "dxc.ve7cc.net",
+  "dx_cluster_port": 23,
+  "dx_cluster_callsign": "W1AW-9",
+  "dx_cluster_nodes": [
+    {"name": "VE7CC", "host": "dxc.ve7cc.net", "port": 23},
+    {"name": "NC7J", "host": "nc7j.com", "port": 7373}
+  ],
+  "dx_filter_bands_mhz": [],
+  "dx_filter_continents": [],
+  "show_demo_spots": false,
+  "map_backend": "static",
+  "target_dx_callsign": "",
+  "minimize_to_tray": true,
+  "check_updates_on_launch": true,
+  "refresh_interval_seconds": 60,
+  "qrz_api_key": "",
+  "map_layers": {
+    "greyline": true,
+    "night": true,
+    "dx_arcs": true,
+    "aurora": true,
+    "grid": false
+  }
+}

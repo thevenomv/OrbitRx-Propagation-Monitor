@@ -12,7 +12,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('world_map.jpg', '.')],
-    hiddenimports=['serial', 'customtkinter', 'tkcalendar', 'matplotlib', 'matplotlib.backends.backend_tkagg', 'PIL', 'win10toast', 'winsound'],
+    hiddenimports=['serial', 'customtkinter', 'matplotlib', 'matplotlib.backends.backend_tkagg', 'PIL', 'win10toast', 'winsound', 'orbitrx', 'orbitrx.ui', 'orbitrx.ui.app'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -30,7 +30,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='RadioPropagationTracker',
+    name='OrbitRxMonitor',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -50,4 +50,4 @@ with open('build_spec.spec', 'w') as f:
 
 print("Spec file created. Running PyInstaller...")
 os.system('pyinstaller build_spec.spec --onefile')
-print("Build complete! Check dist/ folder for RadioPropagationTracker.exe")
+print("Build complete! Check dist/ folder for OrbitRxMonitor.exe")

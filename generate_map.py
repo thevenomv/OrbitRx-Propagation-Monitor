@@ -19,7 +19,13 @@ def generate_world_map(width=1600, height=800):
             img_data = response.read()
         img = Image.open(io.BytesIO(img_data))
         img = img.resize((width, height), Image.Resampling.LANCZOS)
-        img.save('world_map.jpg', 'JPEG', quality=95)
+        out = 'world_map.jpg'
+        try:
+            from orbitrx.paths import project_root
+            out = str(project_root() / 'world_map.jpg')
+        except Exception:
+            pass
+        img.save(out, 'JPEG', quality=95)
         print('[OK] Downloaded and saved world_map.jpg from exact URL')
         return img
     except Exception as e:
@@ -203,7 +209,12 @@ def generate_synthetic_map(width=1600, height=800):
     draw.line([(0, equator_y), (width, equator_y)], fill=(100, 200, 255), width=2)
     draw.line([(pm_x, 0), (pm_x, height)], fill=(100, 200, 255), width=2)
     
-    img.save('world_map.jpg', 'JPEG', quality=95)
+    try:
+        from orbitrx.paths import project_root
+        out = str(project_root() / "world_map.jpg")
+    except Exception:
+        out = "world_map.jpg"
+    img.save(out, "JPEG", quality=95)
     print(f"[OK] Generated synthetic satellite-style map: {width}x{height} pixels")
     return img
 
@@ -212,6 +223,8 @@ def generate_detailed_map(width=1600, height=800):
     Generate a detailed procedural map that actually looks like Earth.
     Uses proper coastline approximations and geographic accuracy.
     """
+    from PIL import ImageDraw
+
     # Create ocean background
     img = Image.new('RGB', (width, height), color=(20, 45, 80))  # Ocean blue
     draw = ImageDraw.Draw(img, 'RGBA')
@@ -384,7 +397,12 @@ def generate_detailed_map(width=1600, height=800):
     draw.line([(pm_x, 0), (pm_x, height)], fill=(100, 180, 220), width=2)
     
     # Save the map
-    img.save('world_map.jpg', 'JPEG', quality=95)
+    try:
+        from orbitrx.paths import project_root
+        out = str(project_root() / "world_map.jpg")
+    except Exception:
+        out = "world_map.jpg"
+    img.save(out, "JPEG", quality=95)
     print(f"[OK] Generated detailed world map: {width}x{height} pixels with proper coastlines")
     return img
 

@@ -35,7 +35,7 @@ A professional-grade desktop dashboard for HAM radio operators. Monitors real-ti
 - Configure `CAT_PORT` and `CAT_BAUD` constants at the top of `app.py`.
 
 #### 2. Live DX Cluster (socket / Telnet)
-- Connects to **ve7cc.net:23** (VE7CC DX cluster) over a persistent background thread.
+- Connects to **dxc.ve7cc.net:23** (VE7CC DX cluster) over a persistent background thread.
 - Incoming `DX de …` lines are parsed, geo-coded, and immediately arc-drawn on the map.
 - **Callsign prefix table** resolves 60+ country prefixes to lat/lon with per-spot jitter.
 - Spots auto-expire after **5 minutes** to keep the map clean.
@@ -57,31 +57,31 @@ A professional-grade desktop dashboard for HAM radio operators. Monitors real-ti
 
 ## Getting Started
 
----
-
-## Getting Started
-
 ### Requirements
 - Python 3.11+
 - Windows / macOS / Linux
 - Internet connection (real-time data)
 
-### Core dependencies
+### Install dependencies
 ```
-pip install pillow matplotlib
+pip install -r requirements.txt
 ```
 
-### Optional Phase 3 dependencies
+### Optional extras
 ```
 pip install pyserial          # CAT radio control (required for physical rig tuning)
-pip install customtkinter     # modern dark-mode UI
-pip install tkcalendar        # calendar date picker for history
-pip install win10toast        # Windows toast notifications
+pip install customtkinter     # modern dark-mode UI shell
+pip install win10toast          # Windows toast notifications on propagation alarms
 ```
 
 ### Run from source
 ```
 py app.py
+```
+or
+```
+pip install -e .
+orbitrx
 ```
 
 ### Build standalone `.exe`
@@ -98,17 +98,21 @@ Output: `dist\OrbitRxMonitor.exe`
 
 ## Configuration
 
-Edit constants at the top of `app.py`:
+Edit `config.json` or use **Settings** in the app:
 
-| Constant | Default | Purpose |
-|----------|---------|---------|
-| `CAT_PORT` | `'COM3'` | Serial port for CAT control |
-| `CAT_BAUD` | `9600` | Baud rate for your transceiver |
-| `CAT_TIMEOUT` | `0.5` | Serial read timeout (seconds) |
-| `DX_CLUSTER_HOST` | `'ve7cc.net'` | Telnet DX cluster hostname |
-| `DX_CLUSTER_PORT` | `23` | Telnet port |
-| `ALERT_KP_THRESHOLD` | `2` | Max Kp to trigger "excellent" alarm |
-| `ALERT_MUF_THRESHOLD` | `28` | Min MUF (MHz) to trigger "excellent" alarm |
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `cat_port` | `COM3` | Serial port for CAT control |
+| `cat_baud` | `9600` | Baud rate |
+| `cat_rig_profile` | `kenwood` | `kenwood`, `icom`, or `yaesu` |
+| `dx_cluster_host` | `dxc.ve7cc.net` | Telnet DX cluster hostname |
+| `dx_cluster_callsign` | `W1AW-9` | Callsign sent on cluster connect |
+| `qrz_api_key` | `""` | Optional QRZ XML lookup for spot coordinates |
+| `target_dx_lat` / `target_dx_lon` | `null` | Path MUF target location |
+| `alert_kp_threshold` | `2` | Max Kp for "excellent" alarm |
+| `alert_muf_threshold` | `28` | Min MUF (MHz) for excellent alarm |
+| `storm_kp_threshold` | `7` | Min Kp for storm alarm |
+| `refresh_interval_seconds` | `60` | Auto-refresh interval |
 
 ---
 
@@ -194,20 +198,41 @@ The **orange line** on the map shows where sunrise and sunset occur. This termin
 ## File Structure
 
 ```
-mypythonapp/
-├── app.py                      # Main application (Phase 1–3)
-├── generate_map.py             # Map downloader with synthetic fallback
-├── build.bat                   # One-click PyInstaller build
-├── build_exe.py                # Python build helper
-├── RadioPropagationTracker.spec# PyInstaller spec
-├── README.md                   # This file
-├── world_map.jpg               # Cached world map image
-├── propagation_log.csv         # Auto-generated propagation log
-├── dx_spots_log.csv            # Auto-generated DX spot log
-└── export.json                 # Last JSON export snapshot
+OrbitRx-Propagation-Monitor/
+├── app.py                      # Entry point
+├── config.json                 # User settings (editable in-app)
+├── orbitrx/                    # Application package (v4)
+│   ├── main.py                 # CLI entry
+│   ├── config.py               # Config loader
+│   ├── state.py                # AppState dataclass
+│   ├── weather.py              # NOAA fetch + offline cache
+│   ├── propagation.py          # MUF, bands, VOACAP-lite path MUF
+│   ├── dx.py                   # DX cluster parser + filters
+│   ├── cat.py                  # Multi-rig CAT control
+│   ├── map_renderer.py         # Cached greyline / aurora / great-circle
+│   ├── storage.py              # SQLite + CSV + log rotation
+│   └── ui/qt_app.py            # Main window (PySide6 — default)
+│   └── ui/tk_app.py            # Tkinter fallback
+│   └── ui/map_widget.py        # QGraphicsView propagation map
+├── tests/                      # pytest unit tests
+├── installer/OrbitRxMonitor.iss# Inno Setup installer script
+├── generate_map.py             # Map downloader
+├── requirements.txt
+├── pyproject.toml
+└── build.bat
 ```
+
+### v5 highlights (recommended UI)
+- **PySide6 (Qt)** desktop UI — native feel, smooth rendering, better threading
+- **Layered map engine**: cached greyline/night raster + **vector DX overlay** (fast spot updates)
+- **900×720** map, antialiased great-circle arcs, optional lat/lon grid
+- Scroll zoom, right-drag pan, double-click reset view
+- Tkinter UI remains as fallback if PySide6 is missing
+
+### v4 highlights
+- Modular `orbitrx` package, SQLite + CSV, propagation science, DX cluster, CAT
 
 ---
 
-**Version**: 3.0  |  **Updated**: March 2026
-**Tested On**: Windows 10/11, Python 3.14+
+**Version**: 5.0  |  **Updated**: June 2026
+**Tested On**: Windows 10/11, Python 3.11+

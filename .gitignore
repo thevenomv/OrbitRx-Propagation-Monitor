@@ -1,0 +1,27 @@
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+*.spec.bak
+build_spec.spec
+
+# Runtime / local data
+propagation_log.csv
+dx_spots_log.csv
+export.json
+orbitrx.db
+orbitrx.db.bak
+weather_cache.json
+logs/
+cat_log.txt
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+_debug_map.png
+.pytest_cache/
+config.json
